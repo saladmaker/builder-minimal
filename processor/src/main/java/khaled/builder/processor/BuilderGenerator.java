@@ -4,8 +4,10 @@ import io.helidon.common.types.TypeName;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
 import static khaled.builder.processor.GenerationInfo.PROTOTYPE_BUILDER;
@@ -74,16 +76,19 @@ public class BuilderGenerator {
 
             String className = type.classNameWithTypes();
 
-            String propertyDeclaration = propertyDeclarationPrefix + className + " " + name;
-
+            String literalValue = "";
+            String finalModifier = "";
             final String defaultValue = property.defaultValue();
             if (null != defaultValue || property.collectionBased()) {
-                String literalValue = generateLiteralDefaultValue(defaultValue, type.boxed());
-                final String assignement = " = " + literalValue;
-                propertyDeclaration = propertyDeclaration + assignement;
+                if (property.collectionBased()) {
+                    finalModifier = "final ";
+                }
+                literalValue = generateLiteralDefaultValue(defaultValue, type.boxed());
+                literalValue = " = " + literalValue;
             }
+            String propertyDeclaration = propertyDeclarationPrefix + finalModifier + className + " " + name;
 
-            propertyDeclaration = propertyDeclaration + ";\n";
+            propertyDeclaration = propertyDeclaration + literalValue + ";\n";
             writer.write(propertyDeclaration);
 
         }
@@ -100,29 +105,29 @@ public class BuilderGenerator {
          */
         return switch (name) {
             case null -> throw new IllegalStateException("null default value");
-            
+
             case "String" -> "\"" + defaultValue + "\"";
-            
+
             case "Boolean" -> Boolean.valueOf(defaultValue).toString();
-            
+
             case "Byte" -> Byte.valueOf(defaultValue).toString();
-            
+
             case "Character" -> "\'" + defaultValue + "\'";
-            
+
             case "Double" -> Double.valueOf(defaultValue).toString();
-            
+
             case "Float" -> Float.valueOf(defaultValue).toString();
-            
+
             case "Integer" -> Integer.valueOf(defaultValue).toString();
-            
+
             case "Long" -> Long.valueOf(defaultValue).toString();
-            
+
             case "Short" -> Short.valueOf(defaultValue).toString();
-                
+
             case "List" -> "new ArrayList<>()";
-                
+
             case "Set" -> "new LinkedHashSet<>()";    
-            
+
             default -> throw new IllegalStateException("unkown type defaulted");
         };
     }
@@ -154,7 +159,7 @@ public class BuilderGenerator {
         for (var property : properties) {
             String name = property.name();
             String builderType = builderName;
-            String paramType = property.type().classNameWithTypes();
+            String paramType = covary(property.type());
 
             String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
                     + paramType + " " + name + "){\n";
@@ -167,8 +172,17 @@ public class BuilderGenerator {
                 mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + name + ";\n";
 
             } else {
+                String requireNonNull = "Objects.requireNonNull(" + name + ");";
+                if (property.collectionBased()) {
+                    mutatorBody = INDENTATION.repeat(3) + requireNonNull + "\n"
+                            + INDENTATION.repeat(3) + "this." + name + ".clear();\n"
+                            + INDENTATION.repeat(3) + "this." + name + ".addAll(" + name + ");\n";
 
-                mutatorBody = INDENTATION.repeat(3) + "this." + name + " = Objects.requireNonNull(" + name + ");\n";
+                } else {
+
+                
+                    mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + requireNonNull + "\n";
+                }
 
             }
             writer.write(mutatorBody);
@@ -183,6 +197,24 @@ public class BuilderGenerator {
             writer.write(returSelf);
             writer.write(INDENTATION.repeat(2) + "}\n\n");
         }
+    }
+
+    private String covary(TypeName type) {
+        List<TypeName> arguments = type.typeArguments()
+                .stream()
+                .map(it -> TypeName.builder(it).wildcard(true).build())
+                .collect(Collectors.toList());
+        String name = type.className();
+        if(!arguments.isEmpty()){
+            String paramFormat = "<%1$s>";
+            String tokens = arguments.stream()
+                    .map(it-> (it.wildcard()? "? extends " : "") + it.className())
+                    .collect(Collectors.joining(", "));
+            String params = paramFormat.formatted(tokens);
+            name = name + params;
+            
+        }
+        return name;
     }
 
     private void generateAccessors() throws IOException {
