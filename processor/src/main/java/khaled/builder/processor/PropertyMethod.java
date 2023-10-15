@@ -10,6 +10,10 @@ public record PropertyMethod(String name, TypeName type, String defaultValue) {
     static final String OPTION_DEFAULT = "io.helidon.builder.api.Option.Default";
     static final TypeName OPTION_DEFAULT_TYPE = TypeName.create(OPTION_DEFAULT);
 
+    public boolean collectionBased() {
+        return type.isList() || type.isSet();
+    }
+
     public static PropertyMethod create(TypedElementInfo tei) {
 
         TypeName returnType = tei.typeName();

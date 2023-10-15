@@ -1,5 +1,6 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.TypeName;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Set;
@@ -33,48 +34,11 @@ public class ImplementationGenerator {
                 + prototypeName + "{\n";
         writer.write(implDeclaration);
 
-        writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
-        String fieldDeclarationPrefix = INDENTATION.repeat(2) + "private final ";
-        for (var property : properties) {
-            String type = property.type().className();
+        generateProperties();
 
-            String name = property.name();
+        generateAccessors();
 
-            String fieldDeclaration = fieldDeclarationPrefix + " " + type + " " + name + ";\n";
-
-            writer.write(fieldDeclaration);
-        }
-
-        writer.write("\n\n" + INDENTATION.repeat(2) + "//accessor\n");
-        String accessorDeclarationPrefix = INDENTATION.repeat(2) + "@Override\n" + INDENTATION.repeat(2) + "public ";
-        for (PropertyMethod property : this.properties) {
-            String type = property.type().className();
-
-            String name = property.name();
-
-            String accessorDeclaration = accessorDeclarationPrefix + type + " " + name + "(){\n";
-
-            writer.write(accessorDeclaration);
-
-            String accessorBody = INDENTATION.repeat(3) + "return this." + name + ";\n";
-
-            writer.write(accessorBody);
-
-            writer.write(INDENTATION.repeat(2) + "}\n\n");
-        }
-
-        String constructorDeclarationPrefix = INDENTATION.repeat(2) + implName + "(final "
-                + builderName + " builder){\n";
-        writer.write(constructorDeclarationPrefix);
-        for (PropertyMethod property : this.properties) {
-            String name = property.name();
-
-            String assignement = INDENTATION.repeat(3) + "this." + name + " = builder." + name + "();\n";
-
-            writer.write(assignement);
-        }
-
-        writer.write(INDENTATION.repeat(2) + "}\n\n");
+        generateConstructor();
 
         generateEquals();
 
@@ -85,8 +49,64 @@ public class ImplementationGenerator {
         writer.write("    }\n\n");
     }
 
+    private void generateProperties() throws IOException {
+        writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
+        String fieldDeclarationPrefix = INDENTATION.repeat(2) + "private final ";
+        for (var property : properties) {
+            String type = property.type().classNameWithTypes();
+
+            String name = property.name();
+
+            String fieldDeclaration = fieldDeclarationPrefix + " " + type + " " + name + ";\n";
+
+            writer.write(fieldDeclaration);
+        }
+    }
+
+    private void generateAccessors() throws IOException {
+        writer.write("\n\n" + INDENTATION.repeat(2) + "//accessor\n");
+        String accessorDeclarationPrefix = INDENTATION.repeat(2) + "@Override\n" + INDENTATION.repeat(2) + "public ";
+        for (PropertyMethod property : properties) {
+            String returnType = property.type().classNameWithTypes();
+
+            String name = property.name();
+
+            String accessorDeclaration = accessorDeclarationPrefix + returnType + " " + name + "(){\n";
+
+            writer.write(accessorDeclaration);
+
+            String accessorBody = INDENTATION.repeat(3) + "return this." + name + ";\n";
+
+            writer.write(accessorBody);
+
+            writer.write(INDENTATION.repeat(2) + "}\n\n");
+        }
+    }
+
+    private void generateConstructor() throws IOException {
+        String constructorDeclarationPrefix = INDENTATION.repeat(2) + implName + "(final "
+                + builderName + " builder){\n";
+        writer.write(constructorDeclarationPrefix);
+        for (PropertyMethod property : properties) {
+            TypeName type = property.type();
+            String name = property.name();
+            String assigement;
+            String assignementPrefix = INDENTATION.repeat(3) + "this." + name + " = ";
+            if(property.collectionBased()){
+                String copyOfAssignement = type.className() + ".copyOf(builder." + name + "());\n";
+                assigement = assignementPrefix + copyOfAssignement;
+            }else{
+                assigement = assignementPrefix + "builder." + name + "();\n";
+            }
+            writer.write(assigement);
+           
+        }
+
+        writer.write(INDENTATION.repeat(2) + "}\n\n");
+    }
+
     private void generateEquals() throws IOException {
-        final String equalsDeclarationPrefix = INDENTATION.repeat(2) + "@Override\n" + INDENTATION.repeat(2) + " public boolean equals(final Object obj){\n";
+        final String equalsDeclarationPrefix = INDENTATION.repeat(2) + "@Override\n" + INDENTATION.repeat(2) + "public boolean equals(final Object obj){\n";
         writer.write(equalsDeclarationPrefix);
         String identityCheckFormat = """
                                    

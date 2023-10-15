@@ -72,12 +72,12 @@ public class BuilderGenerator {
 
             String name = property.name();
 
-            String className = type.className();
+            String className = type.classNameWithTypes();
 
             String propertyDeclaration = propertyDeclarationPrefix + className + " " + name;
 
             final String defaultValue = property.defaultValue();
-            if (null != defaultValue) {
+            if (null != defaultValue || property.collectionBased()) {
                 String literalValue = generateLiteralDefaultValue(defaultValue, type.boxed());
                 final String assignement = " = " + literalValue;
                 propertyDeclaration = propertyDeclaration + assignement;
@@ -118,6 +118,10 @@ public class BuilderGenerator {
             case "Long" -> Long.valueOf(defaultValue).toString();
             
             case "Short" -> Short.valueOf(defaultValue).toString();
+                
+            case "List" -> "new ArrayList<>()";
+                
+            case "Set" -> "new LinkedHashSet<>()";    
             
             default -> throw new IllegalStateException("unkown type defaulted");
         };
@@ -127,7 +131,7 @@ public class BuilderGenerator {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//checkers\n");
         String propertyCheckerPrefix = INDENTATION.repeat(2) + "private boolean ";
         for (var property : properties) {
-            if (null == property.defaultValue()) {
+            if (null == property.defaultValue() && !property.collectionBased()) {
                 String name = property.name();
 
                 String checker = property.name() + CHECKER_SUFFIX;
@@ -150,7 +154,7 @@ public class BuilderGenerator {
         for (var property : properties) {
             String name = property.name();
             String builderType = builderName;
-            String paramType = property.type().className();
+            String paramType = property.type().classNameWithTypes();
 
             String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
                     + paramType + " " + name + "){\n";
@@ -184,7 +188,7 @@ public class BuilderGenerator {
     private void generateAccessors() throws IOException {
         String accessorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
         for (var property : properties) {
-            String type = property.type().className();
+            String type = property.type().classNameWithTypes();
             String name = property.name();
 
             String accessorDeclaration = accessorDeclarationPrefix + type + " " + name + "(){\n";

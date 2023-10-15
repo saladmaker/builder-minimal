@@ -75,7 +75,7 @@ public class BuilderProcessor extends AbstractProcessor {
             GenerationInfo generationInfo = GenerationInfo.create(typeInfo);
             String sourceName = TypeName.builder(typeInfo.typeName())
                     .className(generationInfo.prototypeName()).build().resolvedName();
-            generate(generationInfo, sourceName,  blueprint);
+            generate(generationInfo, sourceName, blueprint);
         }
     }
 
@@ -105,15 +105,7 @@ public class BuilderProcessor extends AbstractProcessor {
 
     private boolean validatePropertyMethod(TypedElementInfo tei) {
         TypeName returnType = tei.typeName();
-        boolean result = TypeNames.STRING.equals(returnType)
-                || TypeNames.BOXED_BOOLEAN.equals(returnType)
-                || TypeNames.BOXED_BYTE.equals(returnType)
-                || TypeNames.BOXED_CHAR.equals(returnType)
-                || TypeNames.BOXED_DOUBLE.equals(returnType)
-                || TypeNames.BOXED_FLOAT.equals(returnType)
-                || TypeNames.BOXED_INT.equals(returnType)
-                || TypeNames.BOXED_SHORT.equals(returnType)
-                || (returnType.primitive() && !returnType.array());
+        boolean result = validateType(returnType);
         if (!result) {
             String methodName = tei.elementName();
             String typeName = tei.enclosingType().map(TypeName::resolvedName).orElse("");
@@ -126,17 +118,36 @@ public class BuilderProcessor extends AbstractProcessor {
         return true;
     }
 
-    private void generate(GenerationInfo generationInfo, String sourceName,  TypeElement blueprint) {
+    private boolean validateType(TypeName type) {
+        if(type.isList() || type.isSet()){
+            return validateSimpleType(type.typeArguments().get(0));
+        }
+        return validateSimpleType(type);
+    }
+
+    private boolean validateSimpleType(TypeName type) {
+        return TypeNames.STRING.equals(type)
+                || TypeNames.BOXED_BOOLEAN.equals(type)
+                || TypeNames.BOXED_BYTE.equals(type)
+                || TypeNames.BOXED_CHAR.equals(type)
+                || TypeNames.BOXED_DOUBLE.equals(type)
+                || TypeNames.BOXED_FLOAT.equals(type)
+                || TypeNames.BOXED_INT.equals(type)
+                || TypeNames.BOXED_SHORT.equals(type)
+                || (type.primitive() && !type.array());
+    }
+
+    private void generate(GenerationInfo generationInfo, String sourceName, TypeElement blueprint) {
         try {
-            
+
             JavaFileObject sourceFile = this.filer.createSourceFile(sourceName, blueprint);
-            
+
             try (Writer writer = sourceFile.openWriter()) {
-                
+
                 Generator generator = new Generator(generationInfo, writer);
                 generator.generate();
             }
-            
+
         } catch (IOException ex) {
             LOGGER.log(System.Logger.Level.ERROR, ex.getMessage());
         }
