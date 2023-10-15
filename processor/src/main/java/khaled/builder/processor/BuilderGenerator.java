@@ -1,9 +1,11 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.TypeName;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
 import static khaled.builder.processor.GenerationInfo.PROTOTYPE_BUILDER;
@@ -16,20 +18,20 @@ import static khaled.builder.processor.GenerationInfo.CHECKER_SUFFIX;
  */
 public class BuilderGenerator {
 
-    private final GenerationInfo generationInfo;
     private final Writer writer;
     private final String builderName;
     private final String prototypeName;
     private final String implName;
+    private final Set<PropertyMethod> properties;
 
     private final Map<String, String> propertyCheckers = new LinkedHashMap<>();
 
     BuilderGenerator(GenerationInfo generationInfo, Writer writer) {
-        this.generationInfo = generationInfo;
         this.writer = writer;
         this.builderName = generationInfo.builderName();
         this.prototypeName = generationInfo.prototypeName();
         this.implName = generationInfo.implName();
+        this.properties = generationInfo.properties();
 
     }
 
@@ -65,41 +67,87 @@ public class BuilderGenerator {
     private void generateProperties() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
         String propertyDeclarationPrefix = INDENTATION.repeat(2) + "private ";
-        for (var property : generationInfo.properties()) {
+        for (var property : properties) {
+            TypeName type = property.type();
+
             String name = property.name();
 
-            String type = property.type().className();
+            String className = type.className();
 
-            String propertyDeclaration = propertyDeclarationPrefix + type + " " + name + " ;\n";
+            String propertyDeclaration = propertyDeclarationPrefix + className + " " + name;
 
+            final String defaultValue = property.defaultValue();
+            if (null != defaultValue) {
+                String literalValue = generateLiteralDefaultValue(defaultValue, type.boxed());
+                final String assignement = " = " + literalValue;
+                propertyDeclaration = propertyDeclaration + assignement;
+            }
+
+            propertyDeclaration = propertyDeclaration + ";\n";
             writer.write(propertyDeclaration);
 
         }
 
     }
 
+    private String generateLiteralDefaultValue(String defaultValue, TypeName type) {
+        String name = type.className();
+
+        /*
+        using the compiler and the javac jvm process as means of validation
+            ValueOf will validate the String
+            single quotation with validate the char
+         */
+        return switch (name) {
+            case null -> throw new IllegalStateException("null default value");
+            
+            case "String" -> "\"" + defaultValue + "\"";
+            
+            case "Boolean" -> Boolean.valueOf(defaultValue).toString();
+            
+            case "Byte" -> Byte.valueOf(defaultValue).toString();
+            
+            case "Character" -> "\'" + defaultValue + "\'";
+            
+            case "Double" -> Double.valueOf(defaultValue).toString();
+            
+            case "Float" -> Float.valueOf(defaultValue).toString();
+            
+            case "Integer" -> Integer.valueOf(defaultValue).toString();
+            
+            case "Long" -> Long.valueOf(defaultValue).toString();
+            
+            case "Short" -> Short.valueOf(defaultValue).toString();
+            
+            default -> throw new IllegalStateException("unkown type defaulted");
+        };
+    }
+
     private void generateCheckers() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//checkers\n");
         String propertyCheckerPrefix = INDENTATION.repeat(2) + "private boolean ";
-        for (var property : generationInfo.properties()) {
-            String name = property.name();
+        for (var property : properties) {
+            if (null == property.defaultValue()) {
+                String name = property.name();
 
-            String checker = property.name() + CHECKER_SUFFIX;
+                String checker = property.name() + CHECKER_SUFFIX;
 
-            if (null != propertyCheckers.put(name, checker)) {
-                throw new IllegalStateException("duplicate property" + name);
+                if (null != propertyCheckers.put(name, checker)) {
+                    throw new IllegalStateException("duplicate property" + name);
+
+                }
+
+                String propertyCheckerDeclaration = propertyCheckerPrefix + checker + " = false;\n";
+                writer.write(propertyCheckerDeclaration);
 
             }
-
-            String propertyCheckerDeclaration = propertyCheckerPrefix + checker + " = false;\n";
-            writer.write(propertyCheckerDeclaration);
         }
     }
 
     private void generateMutators() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//mutators\n");
         String mutatorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
-        for (var property : generationInfo.properties()) {
+        for (var property : properties) {
             String name = property.name();
             String builderType = builderName;
             String paramType = property.type().className();
@@ -123,8 +171,10 @@ public class BuilderGenerator {
 
             // set checker
             String checker = propertyCheckers.get(name);
-            String setChecker = INDENTATION.repeat(3) + "this." + checker + " = true;\n";
-            writer.write(setChecker);
+            if (null != checker) {
+                String setChecker = INDENTATION.repeat(3) + "this." + checker + " = true;\n";
+                writer.write(setChecker);
+            }
             String returSelf = INDENTATION.repeat(3) + "return self();\n";
             writer.write(returSelf);
             writer.write(INDENTATION.repeat(2) + "}\n\n");
@@ -133,7 +183,7 @@ public class BuilderGenerator {
 
     private void generateAccessors() throws IOException {
         String accessorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
-        for (var property : generationInfo.properties()) {
+        for (var property : properties) {
             String type = property.type().className();
             String name = property.name();
 
@@ -149,11 +199,10 @@ public class BuilderGenerator {
     private void generateValidate() throws IOException {
         String validatorDeclarationPrefix = INDENTATION.repeat(2) + "private void validate(){\n\n";
         writer.write(validatorDeclarationPrefix);
-        for (var property : generationInfo.properties()) {
+        for (var propertyName : propertyCheckers.keySet()) {
 
-            String name = property.name();
-            String message = name + " must be set before building";
-            String checker = propertyCheckers.get(name);
+            String message = propertyName + " must be set before building";
+            String checker = propertyCheckers.get(propertyName);
             String validationFormat = """
           %1$sif(!%2$s){%n
           %3$sthrow new IllegalStateException(\"%4$s\");%n
