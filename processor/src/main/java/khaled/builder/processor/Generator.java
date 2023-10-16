@@ -79,7 +79,6 @@ public class Generator {
         boolean importSet = properties.stream()
                 .map(PropertyMethod::type)
                 .anyMatch(TypeName::isSet);
-        System.out.println();
         if(importSet){
             importSets();
         }

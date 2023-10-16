@@ -133,6 +133,7 @@ public class BuilderProcessor extends AbstractProcessor {
                 || TypeNames.BOXED_DOUBLE.equals(type)
                 || TypeNames.BOXED_FLOAT.equals(type)
                 || TypeNames.BOXED_INT.equals(type)
+                || TypeNames.BOXED_LONG.equals(type)
                 || TypeNames.BOXED_SHORT.equals(type)
                 || (type.primitive() && !type.array());
     }

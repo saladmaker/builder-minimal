@@ -155,48 +155,114 @@ public class BuilderGenerator {
 
     private void generateMutators() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//mutators\n");
-        String mutatorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
         for (var property : properties) {
-            String name = property.name();
-            String builderType = builderName;
-            String paramType = covary(property.type());
-
-            String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
-                    + paramType + " " + name + "){\n";
-
-            writer.write(mutatorDeclaration);
-
-            String mutatorBody;
-            if (property.type().primitive()) {
-
-                mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + name + ";\n";
-
+            if (property.collectionBased()) {
+                generateCollectionMutator(property);
             } else {
-                String requireNonNull = "Objects.requireNonNull(" + name + ");";
-                if (property.collectionBased()) {
-                    mutatorBody = INDENTATION.repeat(3) + requireNonNull + "\n"
-                            + INDENTATION.repeat(3) + "this." + name + ".clear();\n"
-                            + INDENTATION.repeat(3) + "this." + name + ".addAll(" + name + ");\n";
-
-                } else {
-
-                
-                    mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + requireNonNull + "\n";
-                }
-
+                generateSimpleMutator(property);
             }
-            writer.write(mutatorBody);
-
-            // set checker
-            String checker = propertyCheckers.get(name);
-            if (null != checker) {
-                String setChecker = INDENTATION.repeat(3) + "this." + checker + " = true;\n";
-                writer.write(setChecker);
-            }
-            String returSelf = INDENTATION.repeat(3) + "return self();\n";
-            writer.write(returSelf);
-            writer.write(INDENTATION.repeat(2) + "}\n\n");
         }
+    }
+
+    private void generateSimpleMutator(PropertyMethod property) throws IOException {
+        String mutatorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
+        String name = property.name();
+        String builderType = builderName;
+        String paramType = property.type().className();
+
+        String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
+                + paramType + " " + name + "){\n";
+
+        writer.write(mutatorDeclaration);
+
+        String mutatorBody;
+        if (property.type().primitive()) {
+
+            mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + name + ";\n";
+
+        } else {
+
+            String requireNonNull = "Objects.requireNonNull(" + name + ");";
+            mutatorBody = INDENTATION.repeat(3) + "this." + name + " = " + requireNonNull + "\n";
+
+        }
+        writer.write(mutatorBody);
+
+        // set checker
+        String checker = propertyCheckers.get(name);
+        if (null != checker) {
+
+            String setChecker = INDENTATION.repeat(3) + "this." + checker + " = true;\n";
+            writer.write(setChecker);
+
+        }
+
+        String returSelf = INDENTATION.repeat(3) + "return self();\n";
+        writer.write(returSelf);
+        writer.write(INDENTATION.repeat(2) + "}\n\n");
+
+    }
+
+    private void generateCollectionMutator(PropertyMethod property) throws IOException {
+        String name = property.name();
+        generateAddCollection(property, name, true, false);
+        generateAddCollection(property, "add" + capitalize(name), false, false);
+        String sigular = property.singlar();
+        if (null != sigular) {
+            if (sigular.isBlank()) {
+                generateAddCollection(property, "add" + capitalize(singular(name)), false, true);
+            } else {
+                generateAddCollection(property, sigular, false, true);
+            }
+        }
+
+    }
+
+    private void generateAddCollection(PropertyMethod property, String methodName, boolean clear, boolean singular) throws IOException {
+        String mutatorDeclarationPrefix = INDENTATION.repeat(2) + "public ";
+        String builderType = builderName;
+        String propertyName = property.name();
+        String paramName;
+        String paramType;
+        if (singular) {
+            paramType = property.type().typeArguments().getFirst().className();
+            paramName = singular(propertyName);
+
+        } else {
+            paramType = covary(property.type());
+            paramName = propertyName;
+        }
+        if (null == paramType) {
+            String message = """
+                          paramType is null method name:%1$s, clear:%2$s, singular:%3$s
+                          property method:%4$s
+                          """.formatted(methodName, clear, singular, property);
+            throw new IllegalStateException(message);
+        }
+        String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + methodName + "(final "
+                + paramType + " " + paramName + "){\n";
+
+        writer.write(mutatorDeclaration);
+
+        String requireNonNull = INDENTATION.repeat(3) + "Objects.requireNonNull(" + paramName + ");\n";
+        writer.write(requireNonNull);
+
+        if (clear) {
+            String clearCollection = INDENTATION.repeat(3) + "this." + propertyName + ".clear();\n";
+            writer.write(clearCollection);
+        }
+        if (singular) {
+            String add = INDENTATION.repeat(3) + "this." + propertyName + ".add(" + paramName + ");\n";
+            writer.write(add);
+
+        } else {
+            String addAll = INDENTATION.repeat(3) + "this." + propertyName + ".addAll(" + paramName + ");\n";
+            writer.write(addAll);
+        }
+        String returSelf = INDENTATION.repeat(3) + "return self();\n";
+
+        writer.write(returSelf);
+        writer.write(INDENTATION.repeat(2) + "}\n\n");
     }
 
     private String covary(TypeName type) {
@@ -205,14 +271,14 @@ public class BuilderGenerator {
                 .map(it -> TypeName.builder(it).wildcard(true).build())
                 .collect(Collectors.toList());
         String name = type.className();
-        if(!arguments.isEmpty()){
+        if (!arguments.isEmpty()) {
             String paramFormat = "<%1$s>";
             String tokens = arguments.stream()
-                    .map(it-> (it.wildcard()? "? extends " : "") + it.className())
+                    .map(it -> (it.wildcard() ? "? extends " : "") + it.className())
                     .collect(Collectors.joining(", "));
             String params = paramFormat.formatted(tokens);
             name = name + params;
-            
+
         }
         return name;
     }
@@ -266,4 +332,18 @@ public class BuilderGenerator {
         writer.write(INDENTATION.repeat(2) + "}\n");
     }
 
+    private static String capitalize(String name) {
+        if (!name.isBlank()) {
+            return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        }
+        return name;
+
+    }
+
+    private static String singular(String name) {
+        if (name.length() > 1 && name.endsWith("s")) {
+            return name.substring(0, name.length() - 1);
+        }
+        return name;
+    }
 }

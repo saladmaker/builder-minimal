@@ -5,10 +5,13 @@ import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypedElementInfo;
 import java.util.List;
 
-public record PropertyMethod(String name, TypeName type, String defaultValue) {
+public record PropertyMethod(String name, TypeName type, String defaultValue, String singlar) {
 
     static final String OPTION_DEFAULT = "io.helidon.builder.api.Option.Default";
     static final TypeName OPTION_DEFAULT_TYPE = TypeName.create(OPTION_DEFAULT);
+
+    static final String OPTION_SINGULAR = "io.helidon.builder.api.Option.Singular";
+    static final TypeName OPTION_SINGULAR_TYPE = TypeName.create(OPTION_SINGULAR);
 
     public boolean collectionBased() {
         return type.isList() || type.isSet();
@@ -21,17 +24,26 @@ public record PropertyMethod(String name, TypeName type, String defaultValue) {
         String name = tei.elementName();
 
         String defaultValue = tei.findAnnotation(OPTION_DEFAULT_TYPE)
-                .map(PropertyMethod::extractValue)
+                .map(PropertyMethod::extractDefaultValue)
                 .orElse(null);
 
-        return new PropertyMethod(name, returnType, defaultValue);
+        String singular = tei.findAnnotation(OPTION_SINGULAR_TYPE)
+                .map(PropertyMethod::extractSingularValue)
+                .orElse(null);
+
+        return new PropertyMethod(name, returnType, defaultValue, singular);
     }
 
-    private static String extractValue(final Annotation annotation) {
+    private static String extractDefaultValue(final Annotation annotation) {
         return annotation.stringValues()
                 .stream()
                 .flatMap(List::stream)
                 .findFirst()
+                .orElse(null);
+    }
+
+    private static String extractSingularValue(final Annotation annotation) {
+        return annotation.stringValue()
                 .orElse(null);
     }
 }
