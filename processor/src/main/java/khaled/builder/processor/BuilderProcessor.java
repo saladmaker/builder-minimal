@@ -119,7 +119,7 @@ public class BuilderProcessor extends AbstractProcessor {
     }
 
     private boolean validateType(TypeName type) {
-        if(type.isList() || type.isSet()){
+        if(type.isList() || type.isSet() || type.isOptional()){
             return validateSimpleType(type.typeArguments().get(0));
         }
         return validateSimpleType(type);
@@ -145,7 +145,7 @@ public class BuilderProcessor extends AbstractProcessor {
 
             try (Writer writer = sourceFile.openWriter()) {
 
-                Generator generator = new Generator(generationInfo, writer);
+                PrototypeGenerator generator = new PrototypeGenerator(generationInfo, writer);
                 generator.generate();
             }
 

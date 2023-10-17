@@ -12,7 +12,7 @@ import static khaled.builder.processor.GenerationInfo.INDENTATION;
  *
  * @author khaled
  */
-public class ImplementationGenerator {
+public final class ImplementationGenerator implements Generator {
 
     private final Writer writer;
     private final String prototypeName;
@@ -29,7 +29,8 @@ public class ImplementationGenerator {
 
     }
 
-    void generateImplementation() throws IOException {
+    @Override
+    public void generate() throws IOException {
         final String implDeclaration = INDENTATION + "class " + this.implName + " implements "
                 + prototypeName + "{\n";
         writer.write(implDeclaration);
@@ -51,35 +52,17 @@ public class ImplementationGenerator {
 
     private void generateProperties() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
-        String fieldDeclarationPrefix = INDENTATION.repeat(2) + "private final ";
         for (var property : properties) {
-            String type = property.type().classNameWithTypes();
-
-            String name = property.name();
-
-            String fieldDeclaration = fieldDeclarationPrefix + " " + type + " " + name + ";\n";
-
-            writer.write(fieldDeclaration);
+            property.typeHandler().generateImplementationProperty(writer, 2);
         }
     }
 
     private void generateAccessors() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//accessor\n");
-        String accessorDeclarationPrefix = INDENTATION.repeat(2) + "@Override\n" + INDENTATION.repeat(2) + "public ";
+        String override = INDENTATION.repeat(2) + "@Override\n";
         for (PropertyMethod property : properties) {
-            String returnType = property.type().classNameWithTypes();
-
-            String name = property.name();
-
-            String accessorDeclaration = accessorDeclarationPrefix + returnType + " " + name + "(){\n";
-
-            writer.write(accessorDeclaration);
-
-            String accessorBody = INDENTATION.repeat(3) + "return this." + name + ";\n";
-
-            writer.write(accessorBody);
-
-            writer.write(INDENTATION.repeat(2) + "}\n\n");
+            writer.write(override);
+            property.typeHandler().generateAccessors(writer, 2, this);
         }
     }
 
@@ -92,14 +75,14 @@ public class ImplementationGenerator {
             String name = property.name();
             String assigement;
             String assignementPrefix = INDENTATION.repeat(3) + "this." + name + " = ";
-            if(property.collectionBased()){
+            if (property.collectionBased()) {
                 String copyOfAssignement = type.className() + ".copyOf(builder." + name + "());\n";
                 assigement = assignementPrefix + copyOfAssignement;
-            }else{
+            } else {
                 assigement = assignementPrefix + "builder." + name + "();\n";
             }
             writer.write(assigement);
-           
+
         }
 
         writer.write(INDENTATION.repeat(2) + "}\n\n");

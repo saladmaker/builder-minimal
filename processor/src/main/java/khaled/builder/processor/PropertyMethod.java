@@ -16,7 +16,17 @@ public record PropertyMethod(String name, TypeName type, String defaultValue, St
     public boolean collectionBased() {
         return type.isList() || type.isSet();
     }
-
+    
+    public TypeHandler typeHandler(){
+        if(collectionBased()){
+            return CollectionTypeHandler.create(this);
+        }if(type.isOptional()){
+            return OptionalTypeHandler.create(this);
+        }else{
+            return new TypeHandler.DefaultTypeHandler(this);
+        }
+    }
+    
     public static PropertyMethod create(TypedElementInfo tei) {
 
         TypeName returnType = tei.typeName();
