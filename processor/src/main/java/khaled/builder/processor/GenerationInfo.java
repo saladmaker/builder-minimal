@@ -15,7 +15,7 @@ public record GenerationInfo(
         String implName,
         String superTypeName,
         String packageName,
-        Set<PropertyMethod> properties) {
+        Set<TypeHandler> typeHandlers) {
 
     static final String BLUEPRINT_SUFFIX = "Blueprint";
     static final String INDENTATION = "    ";
@@ -45,9 +45,10 @@ public record GenerationInfo(
 
         String builderName = BUILDER_NAME;
 
-        Set<PropertyMethod> properties = blueprint.elementInfo()
+        Set<TypeHandler> properties = blueprint.elementInfo()
                 .stream()
                 .map(PropertyMethod::create)
+                .map(TypeHandler::create)
                 .collect(Collectors.toSet());
 
         return new GenerationInfo(prototypeName, builderName, implName, blueprintName, packageName, properties);

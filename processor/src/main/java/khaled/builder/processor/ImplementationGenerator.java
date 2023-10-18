@@ -18,14 +18,14 @@ public final class ImplementationGenerator implements Generator {
     private final String prototypeName;
     private final String implName;
     private final String builderName;
-    private final Set<PropertyMethod> properties;
+    private final Set<TypeHandler> typeHandlers;
 
     public ImplementationGenerator(GenerationInfo generationInfo, Writer writer) {
         this.writer = writer;
         this.implName = generationInfo.implName();
         this.prototypeName = generationInfo.prototypeName();
         this.builderName = generationInfo.builderName();
-        this.properties = generationInfo.properties();
+        this.typeHandlers = generationInfo.typeHandlers();
 
     }
 
@@ -52,17 +52,17 @@ public final class ImplementationGenerator implements Generator {
 
     private void generateProperties() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
-        for (var property : properties) {
-            property.typeHandler().generateImplementationProperty(writer, 2);
+        for (var property : typeHandlers) {
+            property.generateImplementationProperty(writer, 2);
         }
     }
 
     private void generateAccessors() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//accessor\n");
         String override = INDENTATION.repeat(2) + "@Override\n";
-        for (PropertyMethod property : properties) {
+        for (var typeHandler : typeHandlers) {
             writer.write(override);
-            property.typeHandler().generateAccessors(writer, 2, this);
+            typeHandler.generateAccessors(writer, 2, this);
         }
     }
 
@@ -70,7 +70,8 @@ public final class ImplementationGenerator implements Generator {
         String constructorDeclarationPrefix = INDENTATION.repeat(2) + implName + "(final "
                 + builderName + " builder){\n";
         writer.write(constructorDeclarationPrefix);
-        for (PropertyMethod property : properties) {
+        for (var typeHandler : typeHandlers) {
+            PropertyMethod property = typeHandler.property();
             TypeName type = property.type();
             String name = property.name();
             String assigement;
@@ -112,12 +113,13 @@ public final class ImplementationGenerator implements Generator {
         writer.write(typeCheckFormat);
 
         String returnStatement;
-        if (properties.isEmpty()) {
+        if (typeHandlers.isEmpty()) {
             returnStatement = INDENTATION.repeat(3) + "return true;\n";
             writer.write(returnStatement);
         } else {
             var joinExpression = "\n" + INDENTATION.repeat(4) + "&& ";
-            var booleanExpression = properties.stream()
+            var booleanExpression = typeHandlers.stream()
+                    .map(TypeHandler::property)
                     .map(it -> toEqualityExpression(it, "other"))
                     .collect(Collectors.joining(joinExpression));
             returnStatement = INDENTATION.repeat(3) + "return " + booleanExpression + ";\n";
@@ -148,7 +150,8 @@ public final class ImplementationGenerator implements Generator {
                                      
                                      """;
 
-        var params = properties.stream()
+        var params = typeHandlers.stream()
+                .map(TypeHandler::property)
                 .map(PropertyMethod::name)
                 .collect(Collectors.joining(", "));
         String hashCodeDeclaration = hashCodeDeclarationFormat.formatted(
@@ -170,7 +173,8 @@ public final class ImplementationGenerator implements Generator {
                                      
                                      """;
 
-        String propertiesValues = properties.stream()
+        String propertiesValues = typeHandlers.stream()
+                .map(TypeHandler::property)
                 .map(PropertyMethod::name)
                 .map(it -> INDENTATION.repeat(5) + "+ " + "\"" + it + "=\" + " + it)
                 .collect(Collectors.joining(" + \", \"\n"));

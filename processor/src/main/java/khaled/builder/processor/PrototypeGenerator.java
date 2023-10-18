@@ -22,7 +22,7 @@ public final class PrototypeGenerator implements Generator{
     private final ImplementationGenerator implGenerator;
 
     private final String builderName;
-    private final Set<PropertyMethod> properties;
+    private final Set<TypeHandler> typeHandlers;
 
     public PrototypeGenerator(GenerationInfo generationInfo, Writer writer) {
         this.prototypeName = generationInfo.prototypeName();
@@ -32,7 +32,7 @@ public final class PrototypeGenerator implements Generator{
         this.writer = writer;
         this.builderGenerator = new BuilderGenerator(generationInfo, writer);
         this.implGenerator = new ImplementationGenerator(generationInfo, writer);
-        this.properties = generationInfo.properties();
+        this.typeHandlers = generationInfo.typeHandlers();
     }
 
     @Override
@@ -70,20 +70,23 @@ public final class PrototypeGenerator implements Generator{
 
     private void importCollectionAndOptional() throws IOException {
         //import List
-        boolean importList = properties.stream()
+        boolean importList = typeHandlers.stream()
+                .map(TypeHandler::property)
                 .map(PropertyMethod::type)
                 .anyMatch(TypeName::isList);
                 
         if(importList){
             importLists();
         }
-        boolean importSet = properties.stream()
+        boolean importSet = typeHandlers.stream()
+                .map(TypeHandler::property)
                 .map(PropertyMethod::type)
                 .anyMatch(TypeName::isSet);
         if(importSet){
             importSets();
         }
-        boolean importOptional = properties.stream()
+        boolean importOptional = typeHandlers.stream()
+                .map(TypeHandler::property)
                 .map(PropertyMethod::type)
                 .anyMatch(TypeName::isOptional);
         if(importOptional){
@@ -106,7 +109,7 @@ public final class PrototypeGenerator implements Generator{
                      import java.util.LinkedHashSet;                     
                      """);
     }
-        private void importOptional() throws IOException {
+    private void importOptional() throws IOException {
         writer.write("""
                      import java.util.Optional;\n
                      """);

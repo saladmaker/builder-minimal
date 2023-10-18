@@ -18,14 +18,14 @@ public final class BuilderGenerator implements Generator{
     private final String builderName;
     private final String prototypeName;
     private final String implName;
-    private final Set<PropertyMethod> properties;
+    private final Set<TypeHandler> typeHanlders;
 
     BuilderGenerator(GenerationInfo generationInfo, Writer writer) {
         this.writer = writer;
         this.builderName = generationInfo.builderName();
         this.prototypeName = generationInfo.prototypeName();
         this.implName = generationInfo.implName();
-        this.properties = generationInfo.properties();
+        this.typeHanlders = generationInfo.typeHandlers();
 
     }
 
@@ -61,8 +61,8 @@ public final class BuilderGenerator implements Generator{
 
     private void generateProperties() throws IOException {
         writer.write("\n\n" + INDENTATION.repeat(2) + "//properties\n");
-        for (var property : properties) {
-            property.typeHandler().generateBuilderProperty(writer, 2);
+        for (var property : typeHanlders) {
+            property.generateBuilderProperty(writer, 2);
         }
 
     }
@@ -70,30 +70,30 @@ public final class BuilderGenerator implements Generator{
     private void generateCheckers() throws IOException {
         int indentationLevel = 2;
         writer.write("\n\n" + INDENTATION.repeat(indentationLevel) + "//checkers\n");
-        for (var property : properties) {
-            property.typeHandler().generateBuilderChecker(writer, 2);
+        for (var typeHandler : typeHanlders) {
+            typeHandler.generateBuilderChecker(writer, 2);
         }
     }
 
     private void generateMutators() throws IOException {
         var indentationLevel = 2;
         writer.write("\n\n" + INDENTATION.repeat(indentationLevel) + "//mutators\n");
-        for (var property : properties) {
-            property.typeHandler().generateBuilderMutators(writer, builderName, indentationLevel);
+        for (var typeHandler : typeHanlders) {
+            typeHandler.generateBuilderMutators(writer, builderName, indentationLevel);
         }
     }
 
     private void generateAccessors() throws IOException {
-        for (var property : properties) {
-            property.typeHandler().generateAccessors(writer, 2, this);
+        for (var typeHandler : typeHanlders) {
+            typeHandler.generateAccessors(writer, 2, this);
         }
     }
 
     private void generateValidate() throws IOException {
         String validatorDeclarationPrefix = INDENTATION.repeat(2) + "private void validate(){\n\n";
         writer.write(validatorDeclarationPrefix);
-        for (var property: properties) {
-            property.typeHandler().generateBuilderValidateStatement(writer, 3);
+        for (var typeHandler: typeHanlders) {
+            typeHandler.generateBuilderValidateStatement(writer, 3);
         }
         writer.write(INDENTATION.repeat(2) + "}\n\n");
     }

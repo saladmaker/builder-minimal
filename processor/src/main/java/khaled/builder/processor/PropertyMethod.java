@@ -23,7 +23,7 @@ public record PropertyMethod(String name, TypeName type, String defaultValue, St
         }if(type.isOptional()){
             return OptionalTypeHandler.create(this);
         }else{
-            return new TypeHandler.DefaultTypeHandler(this);
+            return new SimpleTypeHandler(this);
         }
     }
     

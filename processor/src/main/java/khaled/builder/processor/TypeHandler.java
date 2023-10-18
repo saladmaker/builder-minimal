@@ -1,5 +1,6 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.TypeName;
 import java.io.IOException;
 import java.io.Writer;
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
@@ -10,7 +11,8 @@ import static khaled.builder.processor.CollectionTypeHandler.Type.SET;
  *
  * @author khaled
  */
-public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, CollectionTypeHandler, OptionalTypeHandler {
+public sealed interface TypeHandler permits  SimpleTypeHandler,
+        CollectionTypeHandler, OptionalTypeHandler {
 
     static final String PROPERTY_FORMAT = "%1$sprivate %2$s%3$s %4$s%5$s";
     static final String NO_INITIALIZATION = ";\n";
@@ -18,9 +20,29 @@ public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, Coll
 
     static final String NONE = "";
     static final String FINAL = "final ";
+    
+    public static TypeHandler create(PropertyMethod property){
+        TypeName type = property.type();
+        
+        if(property.collectionBased()){
+            
+            return type.isList()? new CollectionTypeHandler(property, LIST):
+                    new CollectionTypeHandler(property, SET);
+            
+        } else if(type.isOptional()){
+            return new OptionalTypeHandler(property);
+        }
+        return new SimpleTypeHandler(property);
+    }
 
+    void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException;
+    
     PropertyMethod property();
 
+    default void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {}
+    
+    default void generateBuilderValidateStatement(Writer writer, int indentationLevel) throws IOException {}
+    
     default void generateAccessors(Writer writer, int indentationLevel, Generator generator) throws IOException {
         String accessorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
 
@@ -34,12 +56,52 @@ public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, Coll
         writer.write(INDENTATION.repeat(indentationLevel) + "}\n\n");
     }
 
-    void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException;
+    default void generateBuilderProperty(Writer writer, int indentationLevel) throws IOException {
+        String modifier;
+        String intialValueLiteral;
 
-    default void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {
-    }
+        switch (this) {
 
-    default void generateBuilderValidateStatement(Writer writer, int indentationLevel) throws IOException {
+            case SimpleTypeHandler dd when null != dd.property().defaultValue() -> {
+                modifier = NONE;
+                intialValueLiteral = INITIALIZATION_FORMAT.formatted(initialValueLiteral());
+            }
+            case SimpleTypeHandler d -> {
+                modifier = NONE;
+                intialValueLiteral = NO_INITIALIZATION;
+            }
+
+            case CollectionTypeHandler collection -> {
+
+                modifier = FINAL;
+                intialValueLiteral = NO_INITIALIZATION;
+                var collectionType = collection.collectionType();
+
+                switch (collectionType) {
+                    
+                    case LIST -> {
+                        intialValueLiteral = INITIALIZATION_FORMAT.formatted(LIST.initialization());
+                    }
+                    case SET ->{
+                        intialValueLiteral = INITIALIZATION_FORMAT.formatted(SET.initialization());
+                    }
+                }
+            }
+            case OptionalTypeHandler o -> {
+                modifier = NONE;
+                intialValueLiteral = NO_INITIALIZATION;
+            }
+
+        }
+        String declaration = PROPERTY_FORMAT.formatted(
+                INDENTATION.repeat(indentationLevel),
+                modifier,
+                builderPropertyType(),
+                property().name(),
+                intialValueLiteral
+        );
+        writer.write(declaration);
+
     }
 
     default String initialValueLiteral() {
@@ -87,54 +149,6 @@ public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, Coll
 
     }
 
-    default void generateBuilderProperty(Writer writer, int indentationLevel) throws IOException {
-        String modifier;
-        String intialValueLiteral;
-
-        switch (this) {
-
-            case DefaultTypeHandler dd when null != dd.property().defaultValue() -> {
-                modifier = NONE;
-                intialValueLiteral = INITIALIZATION_FORMAT.formatted(initialValueLiteral());
-            }
-            case DefaultTypeHandler d -> {
-                modifier = NONE;
-                intialValueLiteral = NO_INITIALIZATION;
-            }
-
-            case CollectionTypeHandler collection -> {
-
-                modifier = FINAL;
-                intialValueLiteral = NO_INITIALIZATION;
-                var collectionType = collection.collectionType();
-
-                switch (collectionType) {
-                    
-                    case LIST -> {
-                        intialValueLiteral = INITIALIZATION_FORMAT.formatted(LIST.initialization());
-                    }
-                    case SET ->{
-                        intialValueLiteral = INITIALIZATION_FORMAT.formatted(SET.initialization());
-                    }
-                }
-            }
-            case OptionalTypeHandler o -> {
-                modifier = NONE;
-                intialValueLiteral = NO_INITIALIZATION;
-            }
-
-        }
-        String declaration = PROPERTY_FORMAT.formatted(
-                INDENTATION.repeat(indentationLevel),
-                modifier,
-                builderPropertyType(),
-                property().name(),
-                intialValueLiteral
-        );
-        writer.write(declaration);
-
-    }
-
     default void generateImplementationProperty(Writer writer, int indentationLevel) throws IOException {
         String declaration = PROPERTY_FORMAT.formatted(
                 INDENTATION.repeat(indentationLevel),
@@ -152,10 +166,8 @@ public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, Coll
 
     private String builderPropertyType() {
         return switch (this) {
-            case OptionalTypeHandler o ->
-                o.mutatorType();
-            default ->
-                type();
+            case OptionalTypeHandler o -> o.mutatorType();
+            default -> type();
         };
     }
 
@@ -172,83 +184,4 @@ public sealed interface TypeHandler permits TypeHandler.DefaultTypeHandler, Coll
 
     }
 
-    record DefaultTypeHandler(PropertyMethod property) implements TypeHandler {
-
-        private static final String CHECKER_FORMAT = """
-                                                    %1$sprivate boolean %2$sChecker = false;\n
-                                                    """;
-
-        private static final String VALIDATION_STATEMENT = """
-                                                           %1$sif(!%2$s){
-                                                           %3$s throw new IllegalStateException(\"%4$s\");\n
-                                                           %1$s}
-                                                           
-                                                           """;
-
-        @Override
-        public void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {
-            if (null == property.defaultValue()) {
-                String declaration = CHECKER_FORMAT.formatted(
-                        INDENTATION.repeat(indentationLevel),
-                        property.name());
-                writer.write(declaration);
-            }
-        }
-
-        @Override
-        public void generateBuilderValidateStatement(Writer writer, int indentationLevel) throws IOException {
-            if (null == property.defaultValue()) {
-                String checkerName = property.name() + "Checker";
-                String message = "property " + property.name() + " must be initialized before building";
-                String statement = VALIDATION_STATEMENT.formatted(INDENTATION.repeat(indentationLevel),
-                        checkerName,
-                        INDENTATION.repeat(indentationLevel + 1),
-                        message
-                );
-                writer.write(statement);
-            }
-            writer.write("");
-        }
-
-        @Override
-        public void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException {
-            String mutatorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
-            String name = property.name();
-            String builderType = builderName;
-            String paramType = property.type().className();
-
-            String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
-                    + paramType + " " + name + "){\n";
-
-            writer.write(mutatorDeclaration);
-
-            String mutatorBody;
-            if (property.type().primitive()) {
-
-                mutatorBody = INDENTATION.repeat(indentationLevel + 1) + "this." + name + " = " + name + ";\n";
-
-            } else {
-
-                String requireNonNull = "Objects.requireNonNull(" + name + ");";
-                mutatorBody = INDENTATION.repeat(indentationLevel + 1) + "this." + name + " = " + requireNonNull + "\n";
-
-            }
-            writer.write(mutatorBody);
-
-            // set checker
-            String checkerName = property.name() + "Checker";
-            if (null == property.defaultValue()) {
-
-                String setChecker = INDENTATION.repeat(3) + "this." + checkerName + " = true;\n";
-                writer.write(setChecker);
-
-            }
-
-            String returSelf = INDENTATION.repeat(indentationLevel + 1) + "return self();\n";
-            writer.write(returSelf);
-            writer.write(INDENTATION.repeat(indentationLevel) + "}\n\n");
-
-        }
-
-    }
 }
