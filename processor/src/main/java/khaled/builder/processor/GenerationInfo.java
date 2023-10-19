@@ -47,7 +47,6 @@ public record GenerationInfo(
 
         Set<TypeHandler> properties = blueprint.elementInfo()
                 .stream()
-                .map(PropertyMethod::create)
                 .map(TypeHandler::create)
                 .collect(Collectors.toSet());
 

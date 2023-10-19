@@ -1,5 +1,7 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.TypeName;
+import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
@@ -8,15 +10,12 @@ import static khaled.builder.processor.GenerationInfo.INDENTATION;
  *
  * @author khaled
  */
-public record OptionalTypeHandler(PropertyMethod property) implements TypeHandler {
+public record OptionalTypeHandler(String name, TypeName type, TypedElementInfo tei) implements TypeHandler {
 
-    public static OptionalTypeHandler create(PropertyMethod property) {
-        return new OptionalTypeHandler(property);
-    }
 
     @Override
     public void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException {
-        String propertyName = property().name();
+        String propertyName = name();
         String declaration = INDENTATION.repeat(indentationLevel) + "public " + builderName + " " + propertyName
                 + "(final "
                 + mutatorType()
@@ -31,7 +30,7 @@ public record OptionalTypeHandler(PropertyMethod property) implements TypeHandle
     }
 
     String mutatorType() {
-        return property().type().typeArguments().get(0).className();
+        return type().typeArguments().get(0).className();
     }
 
 }

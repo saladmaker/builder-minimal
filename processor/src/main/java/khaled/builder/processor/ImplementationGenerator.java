@@ -71,12 +71,11 @@ public final class ImplementationGenerator implements Generator {
                 + builderName + " builder){\n";
         writer.write(constructorDeclarationPrefix);
         for (var typeHandler : typeHandlers) {
-            PropertyMethod property = typeHandler.property();
-            TypeName type = property.type();
-            String name = property.name();
+            TypeName type = typeHandler.type();
+            String name = typeHandler.name();
             String assigement;
             String assignementPrefix = INDENTATION.repeat(3) + "this." + name + " = ";
-            if (property.collectionBased()) {
+            if (typeHandler.collectionBased()) {
                 String copyOfAssignement = type.className() + ".copyOf(builder." + name + "());\n";
                 assigement = assignementPrefix + copyOfAssignement;
             } else {
@@ -119,7 +118,6 @@ public final class ImplementationGenerator implements Generator {
         } else {
             var joinExpression = "\n" + INDENTATION.repeat(4) + "&& ";
             var booleanExpression = typeHandlers.stream()
-                    .map(TypeHandler::property)
                     .map(it -> toEqualityExpression(it, "other"))
                     .collect(Collectors.joining(joinExpression));
             returnStatement = INDENTATION.repeat(3) + "return " + booleanExpression + ";\n";
@@ -129,9 +127,9 @@ public final class ImplementationGenerator implements Generator {
 
     }
 
-    private String toEqualityExpression(final PropertyMethod property, String other) {
-        var type = property.type();
-        var name = property.name();
+    private String toEqualityExpression(final TypeHandler typeHandler, String other) {
+        var type = typeHandler.type();
+        var name = typeHandler.name();
         String exp;
         if (type.primitive()) {
             exp = name + " == " + other + "." + name + "()";
@@ -151,8 +149,7 @@ public final class ImplementationGenerator implements Generator {
                                      """;
 
         var params = typeHandlers.stream()
-                .map(TypeHandler::property)
-                .map(PropertyMethod::name)
+                .map(TypeHandler::name)
                 .collect(Collectors.joining(", "));
         String hashCodeDeclaration = hashCodeDeclarationFormat.formatted(
                 INDENTATION.repeat(2),
@@ -174,8 +171,7 @@ public final class ImplementationGenerator implements Generator {
                                      """;
 
         String propertiesValues = typeHandlers.stream()
-                .map(TypeHandler::property)
-                .map(PropertyMethod::name)
+                .map(TypeHandler::name)
                 .map(it -> INDENTATION.repeat(5) + "+ " + "\"" + it + "=\" + " + it)
                 .collect(Collectors.joining(" + \", \"\n"));
         String toStringDeclaration = toStringDeclarationFormat

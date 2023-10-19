@@ -1,5 +1,7 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.TypeName;
+import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
@@ -9,7 +11,7 @@ import static khaled.builder.processor.GenerationInfo.CHECKER_SUFFIX;
  *
  * @author khaled
  */
-public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler {
+public record SimpleTypeHandler(String name, TypeName type, TypedElementInfo tei) implements TypeHandler {
 
     private static final String CHECKER_FORMAT = """
                                                     %1$sprivate boolean %2$s%3$s = false;\n
@@ -27,7 +29,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
         if (!hasDefaultValue()) {
             String declaration = CHECKER_FORMAT.formatted(
                     INDENTATION.repeat(indentationLevel),
-                    property.name(),
+                    name,
                     CHECKER_SUFFIX);
             writer.write(declaration);
         }
@@ -36,8 +38,8 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
     @Override
     public void generateBuilderValidateStatement(Writer writer, int indentationLevel) throws IOException {
         if (!hasDefaultValue()) {
-            String checkerName = property.name() + "Checker";
-            String message = "property " + property.name() + " must be initialized before building";
+            String checkerName = name + "Checker";
+            String message = "property " + name + " must be initialized before building";
             String statement = VALIDATION_STATEMENT.formatted(INDENTATION.repeat(indentationLevel),
                     checkerName,
                     INDENTATION.repeat(indentationLevel + 1),
@@ -51,9 +53,9 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
     @Override
     public void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException {
         String mutatorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
-        String name = property.name();
+        String name = name();
         String builderType = builderName;
-        String paramType = property.type().className();
+        String paramType = type().className();
 
         String mutatorDeclaration = mutatorDeclarationPrefix + builderType + " " + name + "(final "
                 + paramType + " " + name + "){\n";
@@ -61,7 +63,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
         writer.write(mutatorDeclaration);
 
         String mutatorBody;
-        if (property.type().primitive()) {
+        if (type().primitive()) {
 
             mutatorBody = INDENTATION.repeat(indentationLevel + 1) + "this." + name + " = " + name + ";\n";
 
@@ -74,7 +76,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
         writer.write(mutatorBody);
 
         // set checker
-        String checkerName = property.name() + "Checker";
+        String checkerName = name + "Checker";
         if (!hasDefaultValue()) {
 
             String setChecker = INDENTATION.repeat(3) + "this." + checkerName + " = true;\n";

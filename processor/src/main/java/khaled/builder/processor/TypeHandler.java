@@ -1,10 +1,13 @@
 package khaled.builder.processor;
 
+import io.helidon.common.types.Annotation;
 import io.helidon.common.types.TypeName;
+import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,23 +44,31 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     static final String OPTION_SINGULAR = "io.helidon.builder.api.Option.Singular";
     static final TypeName OPTION_SINGULAR_TYPE = TypeName.create(OPTION_SINGULAR);
 
-    public static TypeHandler create(PropertyMethod property) {
-        TypeName type = property.type();
+    public static TypeHandler create(TypedElementInfo tei) {
+        TypeName type = tei.typeName();
+        String name = tei.elementName();
 
-        if (property.collectionBased()) {
+        if (collectionBased(type)) {
+            String singular = tei.findAnnotation(OPTION_SINGULAR_TYPE)
+                    .map(TypeHandler::extractSingularValue)
+                    .orElse(null);
 
-            return type.isList() ? new CollectionTypeHandler(property, LIST)
-                    : new CollectionTypeHandler(property, SET);
+            return type.isList() ? new CollectionTypeHandler(name, type, singular, tei, LIST)
+                    : new CollectionTypeHandler(name, type, singular, tei, SET);
 
         } else if (type.isOptional()) {
-            return new OptionalTypeHandler(property);
+            return new OptionalTypeHandler(name, type, tei);
         }
-        return new SimpleTypeHandler(property);
+        return new SimpleTypeHandler(name, type, tei);
     }
 
     void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException;
 
-    PropertyMethod property();
+    TypeName type();
+
+    String name();
+    
+    TypedElementInfo tei();
 
     default void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {
     }
@@ -68,8 +79,8 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     default void generateAccessors(Writer writer, int indentationLevel, Generator generator) throws IOException {
         String accessorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
 
-        String name = property().name();
-        String accessorDeclaration = accessorDeclarationPrefix + type() + " " + name + "(){\n";
+        String name = name();
+        String accessorDeclaration = accessorDeclarationPrefix + shortHandType() + " " + name + "(){\n";
         writer.write(accessorDeclaration);
         String propertyName = "this." + name;
         String accessMechanism = accessMechanism(propertyName, generator);
@@ -125,30 +136,27 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
                 INDENTATION.repeat(indentationLevel),
                 modifier,
                 builderPropertyType(),
-                property().name(),
+                name(),
                 intialValueLiteral
         );
         writer.write(declaration);
 
     }
 
-    private boolean collectionBased() {
-        return property().type().isList() || property().type().isSet();
+    default boolean collectionBased() {
+        return collectionBased(type());
     }
 
-    private TypeName typeName() {
-        return property().type();
-    }
 
     private Optional<TypeName> defaultValuesTargetTypeName() {
-        if (typeName().isOptional()) {
+        if (type().isOptional()) {
             return Optional.empty();
         }
         if (collectionBased()) {
-            return typeName().typeArguments().stream()
+            return type().typeArguments().stream()
                     .findFirst();
         } else {
-            return Optional.of(typeName().boxed());
+            return Optional.of(type().boxed());
         }
     }
 
@@ -231,7 +239,8 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     }
 
     private List<?> extractOne(TypeName annoType) {
-        var tei = property().typedInfo();
+        var tei = tei();
+        
         var annoOpt = tei.findAnnotation(annoType);
         if (annoOpt.isPresent()) {
             var anno = annoOpt.get();
@@ -254,7 +263,7 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     }
 
     private List<?> extractAll(TypeName annoType) {
-        var tei = property().typedInfo();
+        var tei = tei();
         var annoOpt = tei.findAnnotation(annoType);
         if (annoOpt.isPresent()) {
             var anno = annoOpt.get();
@@ -292,21 +301,21 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
             switch (name) {
                 case null ->
                     throw new IllegalStateException("null default value");
-                case "Byte" ->{
+                case "Byte" -> {
                     literal = defaultValue.stream()
                             .map(Object::toString)
                             .map(TypeHandler::ByteLiteral)
                             .collect(Collectors.joining(", "));
-                    
+
                 }
-                case "Short" ->{
+                case "Short" -> {
                     literal = defaultValue.stream()
                             .map(Object::toString)
                             .map(TypeHandler::ShortLiteral)
                             .collect(Collectors.joining(", "));
                 }
-                
-                case "Float" ->{
+
+                case "Float" -> {
                     literal = defaultValue.stream()
                             .map(Object::toString)
                             .map(TypeHandler::floatLiteral)
@@ -346,15 +355,15 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
         String declaration = PROPERTY_FORMAT.formatted(
                 INDENTATION.repeat(indentationLevel),
                 FINAL,
-                type(),
-                property().name(),
+                shortHandType(),
+                name(),
                 NO_INITIALIZATION
         );
         writer.write(declaration);
     }
 
-    private String type() {
-        return property().type().classNameWithTypes();
+    private String shortHandType() {
+        return type().classNameWithTypes();
     }
 
     private String builderPropertyType() {
@@ -362,7 +371,7 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
             case OptionalTypeHandler o ->
                 o.mutatorType();
             default ->
-                type();
+                shortHandType();
         };
     }
 
@@ -406,13 +415,21 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
         }
         return "(short)" + Short.valueOf(value);
     }
-    
+
     private static String floatLiteral(String value) {
         if (value.isEmpty() || value.isBlank()) {
             return "";
         }
         return "(float)" + Float.valueOf(value);
     }
-    
+
+    private static String extractSingularValue(final Annotation annotation) {
+        return annotation.stringValue()
+                .orElse(null);
+    }
+    private static boolean collectionBased(TypeName type){
+        Objects.requireNonNull(type);
+        return type.isList() || type.isSet();
+    }
 
 }

@@ -71,23 +71,20 @@ public final class PrototypeGenerator implements Generator{
     private void importCollectionAndOptional() throws IOException {
         //import List
         boolean importList = typeHandlers.stream()
-                .map(TypeHandler::property)
-                .map(PropertyMethod::type)
+                .map(TypeHandler::type)
                 .anyMatch(TypeName::isList);
                 
         if(importList){
             importLists();
         }
         boolean importSet = typeHandlers.stream()
-                .map(TypeHandler::property)
-                .map(PropertyMethod::type)
+                .map(TypeHandler::type)
                 .anyMatch(TypeName::isSet);
         if(importSet){
             importSets();
         }
         boolean importOptional = typeHandlers.stream()
-                .map(TypeHandler::property)
-                .map(PropertyMethod::type)
+                .map(TypeHandler::type)
                 .anyMatch(TypeName::isOptional);
         if(importOptional){
             importOptional();
