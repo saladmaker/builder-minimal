@@ -120,7 +120,7 @@ public class BuilderProcessor extends AbstractProcessor {
 
     private boolean validateType(TypeName type) {
         if(type.isList() || type.isSet() || type.isOptional()){
-            return validateSimpleType(type.typeArguments().get(0));
+            return validateSimpleType(type.typeArguments().getFirst());
         }
         return validateSimpleType(type);
     }

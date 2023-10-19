@@ -1,7 +1,6 @@
 package khaled.builder.processor;
 
 import io.helidon.common.types.TypeName;
-import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
@@ -12,7 +11,7 @@ import static khaled.builder.processor.GenerationInfo.INDENTATION;
  *
  * @author khaled
  */
-public record CollectionTypeHandler(String name, TypeName type, String singular, TypedElementInfo tei, Type collectionType) implements TypeHandler {
+public record CollectionTypeHandler(String name, TypeName type, String singular, List<?> defaultValues, Type collectionType) implements TypeHandler {
     
     enum Type {
         SET {
@@ -35,7 +34,7 @@ public record CollectionTypeHandler(String name, TypeName type, String singular,
 
     @Override
     public void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException {
-        String name = name();
+
         generateAddCollection(writer, builderName, indentationLevel, name, true, false);
         generateAddCollection(writer, builderName, indentationLevel, "add" + capitalize(name), false, false);
         if (null != singular) {
@@ -49,16 +48,16 @@ public record CollectionTypeHandler(String name, TypeName type, String singular,
     private void generateAddCollection(Writer writer,String builderName, int indentationLevel, String methodName, boolean clear, boolean singular) throws IOException{
         String mutatorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
         String builderType = builderName;
-        String propertyName = name;
         String paramName;
         String paramType;
+        
         if (singular) {
             paramType = type.typeArguments().getFirst().className();
-            paramName = singular(propertyName);
+            paramName = singular(name);
 
         } else {
             paramType = covary(type);
-            paramName = propertyName;
+            paramName = name;
         }
         if (null == paramType) {
             String message = """
@@ -76,15 +75,15 @@ public record CollectionTypeHandler(String name, TypeName type, String singular,
         writer.write(requireNonNull);
 
         if (clear) {
-            String clearCollection = INDENTATION.repeat(indentationLevel + 1) + "this." + propertyName + ".clear();\n";
+            String clearCollection = INDENTATION.repeat(indentationLevel + 1) + "this." + name + ".clear();\n";
             writer.write(clearCollection);
         }
         if (singular) {
-            String add = INDENTATION.repeat(indentationLevel + 1 ) + "this." + propertyName + ".add(" + paramName + ");\n";
+            String add = INDENTATION.repeat(indentationLevel + 1 ) + "this." + name + ".add(" + paramName + ");\n";
             writer.write(add);
 
         } else {
-            String addAll = INDENTATION.repeat(indentationLevel + 1) + "this." + propertyName + ".addAll(" + paramName + ");\n";
+            String addAll = INDENTATION.repeat(indentationLevel + 1) + "this." + name + ".addAll(" + paramName + ");\n";
             writer.write(addAll);
         }
         String returSelf = INDENTATION.repeat(indentationLevel + 1) + "return self();\n";

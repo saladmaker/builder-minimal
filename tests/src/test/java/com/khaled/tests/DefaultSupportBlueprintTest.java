@@ -19,6 +19,7 @@ public class DefaultSupportBlueprintTest {
         
         assertThat(defaultSupport.name(), is(DefaultSupportBlueprint.DEFAULT_NAME));
         assertThat(defaultSupport.bit(), is(Byte.valueOf(DefaultSupportBlueprint.DEFAULT_BIT)));
+        assertThat(defaultSupport.bool(), is(equalTo(Boolean.FALSE)));
         
     }
 }

@@ -1,7 +1,6 @@
 package khaled.builder.processor;
 
 import io.helidon.common.types.TypeName;
-import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
@@ -10,7 +9,7 @@ import static khaled.builder.processor.GenerationInfo.INDENTATION;
  *
  * @author khaled
  */
-public record OptionalTypeHandler(String name, TypeName type, TypedElementInfo tei) implements TypeHandler {
+public record OptionalTypeHandler(String name, TypeName type) implements TypeHandler {
 
 
     @Override
@@ -30,7 +29,7 @@ public record OptionalTypeHandler(String name, TypeName type, TypedElementInfo t
     }
 
     String mutatorType() {
-        return type().typeArguments().get(0).className();
+        return type().typeArguments().getFirst().className();
     }
 
 }

@@ -5,12 +5,10 @@ import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypedElementInfo;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import static khaled.builder.processor.GenerationInfo.INDENTATION;
 import static khaled.builder.processor.CollectionTypeHandler.Type.LIST;
 import static khaled.builder.processor.CollectionTypeHandler.Type.SET;
@@ -48,18 +46,35 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
         TypeName type = tei.typeName();
         String name = tei.elementName();
 
+        List<?> defaultValues;
+
         if (collectionBased(type)) {
+            TypeName target = targetTypeOfCollection(type);
+            
+            defaultValues = extractValues(target.className(), tei);
             String singular = tei.findAnnotation(OPTION_SINGULAR_TYPE)
                     .map(TypeHandler::extractSingularValue)
                     .orElse(null);
-
-            return type.isList() ? new CollectionTypeHandler(name, type, singular, tei, LIST)
-                    : new CollectionTypeHandler(name, type, singular, tei, SET);
+            return type.isList()
+                    ? new CollectionTypeHandler(name, type, singular, defaultValues, LIST)
+                    : new CollectionTypeHandler(name, type, singular, defaultValues, SET);
 
         } else if (type.isOptional()) {
-            return new OptionalTypeHandler(name, type, tei);
+            return new OptionalTypeHandler(name, type);
+
+        } else {
+            String target = boxedName(type);
+            defaultValues = extractValues(target, tei);
+            if (defaultValues.size() > 1) {
+                throw new IllegalStateException(type + " " + name + "() can not have multiple default values ");
+            }
+            if (!defaultValues.isEmpty()) {
+                return new SimpleTypeHandler(name, type, defaultValues.getFirst());
+            } else {
+                return new SimpleTypeHandler(name, type, null);
+            }
+
         }
-        return new SimpleTypeHandler(name, type, tei);
     }
 
     void generateBuilderMutators(Writer writer, String builderName, int indentationLevel) throws IOException;
@@ -67,8 +82,6 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     TypeName type();
 
     String name();
-    
-    TypedElementInfo tei();
 
     default void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {
     }
@@ -79,10 +92,9 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     default void generateAccessors(Writer writer, int indentationLevel, Generator generator) throws IOException {
         String accessorDeclarationPrefix = INDENTATION.repeat(indentationLevel) + "public ";
 
-        String name = name();
-        String accessorDeclaration = accessorDeclarationPrefix + shortHandType() + " " + name + "(){\n";
+        String accessorDeclaration = accessorDeclarationPrefix + shortHandType() + " " + name() + "(){\n";
         writer.write(accessorDeclaration);
-        String propertyName = "this." + name;
+        String propertyName = "this." + name();
         String accessMechanism = accessMechanism(propertyName, generator);
         String accessorBody = INDENTATION.repeat(indentationLevel + 1) + "return " + accessMechanism + ";\n";
         writer.write(accessorBody);
@@ -90,7 +102,14 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     }
 
     default boolean hasDefaultValue() {
-        return !extractDefaultValue().isEmpty();
+        return switch (this) {
+            case SimpleTypeHandler s ->
+                null != s.defaultValue();
+            case CollectionTypeHandler c ->
+                true;
+            case OptionalTypeHandler o ->
+                false;
+        };
     }
 
     default void generateBuilderProperty(Writer writer, int indentationLevel) throws IOException {
@@ -99,7 +118,7 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
 
         switch (this) {
 
-            case SimpleTypeHandler dd when !extractDefaultValue().isEmpty() -> {
+            case SimpleTypeHandler dd when null != dd.defaultValue() -> {
                 modifier = NONE;
                 intialValueLiteral = INITIALIZATION_FORMAT.formatted(initialValueLiteral());
             }
@@ -112,9 +131,8 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
 
                 modifier = FINAL;
                 intialValueLiteral = NO_INITIALIZATION;
-                var collectionType = collection.collectionType();
-
-                switch (collectionType) {
+                
+                switch (collection.collectionType()) {
 
                     case LIST -> {
                         String constructor = LIST.initialization().formatted(initialValueLiteral());
@@ -148,207 +166,24 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
     }
 
 
-    private Optional<TypeName> defaultValuesTargetTypeName() {
-        if (type().isOptional()) {
-            return Optional.empty();
-        }
-        if (collectionBased()) {
-            return type().typeArguments().stream()
-                    .findFirst();
-        } else {
-            return Optional.of(type().boxed());
-        }
-    }
 
-    default List<?> extractDefaultValue() {
-        Optional<TypeName> targetOpt = defaultValuesTargetTypeName();
-        List<?> value = List.of();
-        if (targetOpt.isPresent()) {
-            TypeName target = targetOpt.get();
-            String name = target.className();
-
-            switch (name) {
-                case "String", "Character", "Boolean" -> {
-                    switch (this) {
-                        case SimpleTypeHandler s -> {
-                            return extractOne(OPTION_DEFAULT_TYPE);
-
-                        }
-
-                        case CollectionTypeHandler c -> {
-                            return extractAll(OPTION_DEFAULT_TYPE);
-                        }
-                        case OptionalTypeHandler o -> {
-                            throw new IllegalStateException("optional cannot have default values");
-                        }
-                    }
-
-                }
-                case "Integer", "Short", "Byte" -> {
-                    switch (this) {
-                        case SimpleTypeHandler s -> {
-                            return extractOne(OPTION_DEFAULT_INT_TYPE);
-                        }
-                        case CollectionTypeHandler c -> {
-                            return extractAll(OPTION_DEFAULT_INT_TYPE);
-                        }
-                        case OptionalTypeHandler o -> {
-                            throw new IllegalStateException("optional cannot have default values");
-                        }
-                    }
-                }
-
-                case "Long" -> {
-                    switch (this) {
-                        case SimpleTypeHandler s -> {
-                            return extractOne(OPTION_DEFAULT_LONG_TYPE);
-                        }
-                        case CollectionTypeHandler c -> {
-                            return extractAll(OPTION_DEFAULT_LONG_TYPE);
-                        }
-                        case OptionalTypeHandler o -> {
-                            throw new IllegalStateException("optional cannot have default values");
-                        }
-                    }
-
-                }
-
-                case "Double", "Float" -> {
-                    switch (this) {
-                        case SimpleTypeHandler s -> {
-                            return extractOne(OPTION_DEFAULT_DOUBLE_TYPE);
-
-                        }
-
-                        case CollectionTypeHandler c -> {
-                            return extractAll(OPTION_DEFAULT_DOUBLE_TYPE);
-
-                        }
-                        case OptionalTypeHandler o -> {
-                            throw new IllegalStateException("optional cannot have default values");
-                        }
-                    }
-                }
-
-                default -> {
-                    throw new IllegalStateException("unkown type: " + name + " handler: " + this);
-                }
+    private String initialValueLiteral() {
+        switch (this) {
+            case SimpleTypeHandler s -> {
+                String literalType = boxedName();
+                String defaultValue = s.defaultValue().toString();
+                return mapToLiteral(literalType, defaultValue);
             }
-        }
-        return value;
-    }
-
-    private List<?> extractOne(TypeName annoType) {
-        var tei = tei();
-        
-        var annoOpt = tei.findAnnotation(annoType);
-        if (annoOpt.isPresent()) {
-            var anno = annoOpt.get();
-            var allValues = anno.values().values().stream()
-                    .flatMap(it -> {
-
-                        if (it instanceof Collection<?> c) {
-                            return c.stream();
-                        }
-                        return Stream.empty();
-
-                    })
-                    .toList();
-            if (allValues.size() > 1 || allValues.isEmpty()) {
-                throw new IllegalStateException("default value must of size 1");
+            case CollectionTypeHandler c -> {
+                final String target = targetTypeOfCollection(type()).className();
+                List<?> defaultValues = c.defaultValues();
+                return mapListToLiteral(target, defaultValues);
             }
-            return List.copyOf(allValues);
-        }
-        return List.of();
-    }
-
-    private List<?> extractAll(TypeName annoType) {
-        var tei = tei();
-        var annoOpt = tei.findAnnotation(annoType);
-        if (annoOpt.isPresent()) {
-            var anno = annoOpt.get();
-            var allValues = anno.values().values().stream()
-                    .flatMap(it -> {
-
-                        if (it instanceof Collection<?> c) {
-                            return c.stream();
-                        }
-                        return Stream.empty();
-
-                    })
-                    .toList();
-
-            return List.copyOf(allValues);
-        }
-        return List.of();
-    }
-
-    default String initialValueLiteral() {
-        String literal = "";
-
-        if (defaultValuesTargetTypeName().isPresent()) {
-            String name = defaultValuesTargetTypeName().get().className();
-            List<?> defaultValue = extractDefaultValue();
-
-            String arrange = defaultValue.stream()
-                    .map(Object::toString)
-                    .collect(Collectors.joining(", "));
-            /*
-            using the compiler and the javac jvm process as means of validation
-            ValueOf will validate the String
-            single quotation with validate the char
-             */
-            switch (name) {
-                case null ->
-                    throw new IllegalStateException("null default value");
-                case "Byte" -> {
-                    literal = defaultValue.stream()
-                            .map(Object::toString)
-                            .map(TypeHandler::ByteLiteral)
-                            .collect(Collectors.joining(", "));
-
-                }
-                case "Short" -> {
-                    literal = defaultValue.stream()
-                            .map(Object::toString)
-                            .map(TypeHandler::ShortLiteral)
-                            .collect(Collectors.joining(", "));
-                }
-
-                case "Float" -> {
-                    literal = defaultValue.stream()
-                            .map(Object::toString)
-                            .map(TypeHandler::floatLiteral)
-                            .collect(Collectors.joining(", "));
-                }
-                case "Boolean", "Double", "Integer", "Long" -> {
-                    literal = arrange;
-                }
-
-                case "String" -> {
-                    literal = defaultValue.stream()
-                            .map(Object::toString)
-                            .map(TypeHandler::StringLiteral)
-                            .collect(Collectors.joining(", "));
-                }
-
-                case "Character" -> {
-                    literal = defaultValue.stream()
-                            .map(Object::toString)
-                            .map(TypeHandler::CharLiteral)
-                            .collect(Collectors.joining(", "));
-
-                }
-
-                default -> {
-
-                    throw new IllegalStateException("unkown type defaulted" + name);
-                }
+            default -> {
+                return "";
             }
-            return literal;
-        }
-        return literal;
 
+        }
     }
 
     default void generateImplementationProperty(Writer writer, int indentationLevel) throws IOException {
@@ -390,46 +225,166 @@ public sealed interface TypeHandler permits SimpleTypeHandler,
         return propertyName;
 
     }
+    
+    private String boxedName() {
+        return boxedName(type());
+    }
+    
+    private static String boxedName(TypeName type) {
+        return type.boxed().className();
+    }
 
-    private static String StringLiteral(String value) {
+    private static TypeName targetTypeOfCollection(TypeName type) {
+        return type.typeArguments()
+                .stream()
+                .findFirst()
+                .orElseThrow(IllegalStateException::new);
+    }
+    private static String mapListToLiteral(final String type, List<?> defaultValues){
+        return defaultValues.stream()
+                .map(Object::toString)
+                .map(it -> mapToLiteral(type, it))
+                .collect(Collectors.joining(", "));
+    }
+    private static String mapToLiteral(String target, String defaultValue) {
+        switch (target) {
+            
+            case "Boolean" -> {
+                return Boolean.valueOf(defaultValue).toString();
+            }
+            case "Character" -> {
+                return charLiteral(defaultValue);
+            }
+            case "String" -> {
+                return stringLiteral(defaultValue);
+            }
+       
+            case "Integer" -> {
+                return Integer.valueOf(defaultValue).toString();
+            }
+            case "Byte" -> {
+                return byteLiteral(defaultValue);
+            }
+            case "Short" -> {
+                return shortLiteral(defaultValue);
+            }
+            
+            case "Long" ->{
+                return longLiteral(defaultValue);
+            }
+            case "Double" -> {
+                return Double.valueOf(defaultValue).toString();
+            }
+
+            case "Float" -> {
+                return floatLiteral(defaultValue);
+            }
+            default ->
+                throw new IllegalStateException("unkown type: " + target);
+
+        }
+
+    }
+
+    private static String stringLiteral(String value) {
         return "\"" + value + "\"";
     }
 
-    private static String CharLiteral(String value) {
+    private static String charLiteral(String value) {
         if (value.length() == 1) {
             return "\'" + value + "\'";
         }
-        return "";
+        throw new IllegalStateException("char defaul value must be of length 1");
     }
 
-    private static String ByteLiteral(String value) {
+    private static String byteLiteral(String value) {
         if (value.isEmpty() || value.isBlank()) {
             return "";
         }
         return "(byte)" + Byte.valueOf(value);
     }
 
-    private static String ShortLiteral(String value) {
-        if (value.isEmpty() || value.isBlank()) {
-            return "";
-        }
+    private static String shortLiteral(String value) {
         return "(short)" + Short.valueOf(value);
     }
 
     private static String floatLiteral(String value) {
-        if (value.isEmpty() || value.isBlank()) {
-            return "";
-        }
         return "(float)" + Float.valueOf(value);
+    }
+    private static String longLiteral(String value) {
+        return Long.valueOf(value) + "L";
     }
 
     private static String extractSingularValue(final Annotation annotation) {
         return annotation.stringValue()
                 .orElse(null);
     }
-    private static boolean collectionBased(TypeName type){
+
+    private static boolean collectionBased(TypeName type) {
         Objects.requireNonNull(type);
         return type.isList() || type.isSet();
     }
+    
+    private static List<?> extractValues(String type, TypedElementInfo tei) {
+        
+        return switch (type) {
+            case "String", "Boolean", "Character" -> extractStrings(tei);
+            case "Byte", "Short", "Integer" -> extractInts(tei);
 
+            case "Long" -> extractLongs(tei);
+
+            case "Float", "Double" -> extractDoubles(tei);
+            default ->
+                throw new IllegalStateException("unkown type" + type);
+
+        };
+
+    }
+    
+    private static List<?> extractStrings(TypedElementInfo tei){
+        
+        Optional<Annotation> defOpt = tei.findAnnotation(OPTION_DEFAULT_TYPE);
+        if(defOpt.isPresent()){
+            Annotation defaultAnno = defOpt.get();
+            return defaultAnno.stringValues().stream()
+                    .flatMap(List::stream)
+                    .toList();
+        }
+        return List.of();
+    }
+    private static List<?> extractInts(TypedElementInfo tei){
+        
+        Optional<Annotation> defOpt = tei.findAnnotation(OPTION_DEFAULT_INT_TYPE);
+        if(defOpt.isPresent()){
+            Annotation defaultAnno = defOpt.get();
+            return defaultAnno.intValues().stream()
+                    .flatMap(List::stream)
+                    .toList();
+        }
+        return List.of();
+    }
+    private static List<?> extractLongs(TypedElementInfo tei){
+        
+        Optional<Annotation> defOpt = tei.findAnnotation(OPTION_DEFAULT_LONG_TYPE);
+        if(defOpt.isPresent()){
+            Annotation defaultAnno = defOpt.get();
+            return defaultAnno.longValues().stream()
+                    .flatMap(List::stream)
+                    .toList();
+        }
+        return List.of();
+    }
+    private static List<?> extractDoubles(TypedElementInfo tei){
+        
+        Optional<Annotation> defOpt = tei.findAnnotation(OPTION_DEFAULT_DOUBLE_TYPE);
+        if(defOpt.isPresent()){
+            Annotation defaultAnno = defOpt.get();
+            return defaultAnno.doubleValues().stream()
+                    .flatMap(List::stream)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    
 }

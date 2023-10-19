@@ -24,6 +24,9 @@ public interface SupportAllDefaultBlueprint {
     @Option.DefaultInt({1,2,3,4,5})
     List<Byte> bytes();
     
+    @Option.DefaultLong({2332332342L,324234243})
+    List<Long> longs();
+    
     @Option.Default({"khaled", "abderrahim"})
     List<String> strings();
     

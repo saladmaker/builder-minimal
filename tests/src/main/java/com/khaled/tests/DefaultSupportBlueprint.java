@@ -22,5 +22,6 @@ public interface DefaultSupportBlueprint {
     @Option.DefaultInt(DEFAULT_BIT)
     byte bit();
     
-    
+    @Option.Default("false")
+    boolean bool();
 }
