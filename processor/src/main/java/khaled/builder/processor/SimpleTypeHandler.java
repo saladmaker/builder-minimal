@@ -24,7 +24,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
 
     @Override
     public void generateBuilderChecker(Writer writer, int indentationLevel) throws IOException {
-        if (null == property.defaultValue()) {
+        if (!hasDefaultValue()) {
             String declaration = CHECKER_FORMAT.formatted(
                     INDENTATION.repeat(indentationLevel),
                     property.name(),
@@ -35,7 +35,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
 
     @Override
     public void generateBuilderValidateStatement(Writer writer, int indentationLevel) throws IOException {
-        if (null == property.defaultValue()) {
+        if (!hasDefaultValue()) {
             String checkerName = property.name() + "Checker";
             String message = "property " + property.name() + " must be initialized before building";
             String statement = VALIDATION_STATEMENT.formatted(INDENTATION.repeat(indentationLevel),
@@ -75,7 +75,7 @@ public record SimpleTypeHandler(PropertyMethod property) implements TypeHandler 
 
         // set checker
         String checkerName = property.name() + "Checker";
-        if (null == property.defaultValue()) {
+        if (!hasDefaultValue()) {
 
             String setChecker = INDENTATION.repeat(3) + "this." + checkerName + " = true;\n";
             writer.write(setChecker);

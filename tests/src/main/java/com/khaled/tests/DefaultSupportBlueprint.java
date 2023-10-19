@@ -10,7 +10,7 @@ import io.helidon.builder.api.Option;
 @Prototype.Blueprint
 public interface DefaultSupportBlueprint {
     static final String DEFAULT_NAME = "khaled";
-    static final String DEFAULT_BIT ="2";
+    static final byte DEFAULT_BIT = 2;
     
     @Option.Default(DEFAULT_NAME)
     String name();
@@ -19,7 +19,7 @@ public interface DefaultSupportBlueprint {
     
     Double doubleValue();
     
-    @Option.Default(DEFAULT_BIT)
+    @Option.DefaultInt(DEFAULT_BIT)
     byte bit();
     
     

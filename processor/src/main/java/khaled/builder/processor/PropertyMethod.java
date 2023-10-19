@@ -5,11 +5,11 @@ import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypedElementInfo;
 import java.util.List;
 
-public record PropertyMethod(String name, TypeName type, String defaultValue, String singlar) {
+public record PropertyMethod(String name, TypeName type, String defaultValue, String singlar, TypedElementInfo typedInfo) {
 
     static final String OPTION_DEFAULT = "io.helidon.builder.api.Option.Default";
     static final TypeName OPTION_DEFAULT_TYPE = TypeName.create(OPTION_DEFAULT);
-
+    
     static final String OPTION_SINGULAR = "io.helidon.builder.api.Option.Singular";
     static final TypeName OPTION_SINGULAR_TYPE = TypeName.create(OPTION_SINGULAR);
 
@@ -41,9 +41,9 @@ public record PropertyMethod(String name, TypeName type, String defaultValue, St
                 .map(PropertyMethod::extractSingularValue)
                 .orElse(null);
 
-        return new PropertyMethod(name, returnType, defaultValue, singular);
+        return new PropertyMethod(name, returnType, defaultValue, singular, tei);
     }
-
+    
     private static String extractDefaultValue(final Annotation annotation) {
         return annotation.stringValues()
                 .stream()

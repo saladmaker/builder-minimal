@@ -17,14 +17,14 @@ public record CollectionTypeHandler(PropertyMethod property, Type collectionType
         SET {
             @Override
             String initialization() {
-                return "new LinkedHashSet<>()";
+                return "new LinkedHashSet<>(Set.of(%1$s))";
             }
 
         },
         LIST {
             @Override
             String initialization() {
-                return "new ArrayList<>()";
+                return "new ArrayList<>(List.of(%1$s))";
             }
 
         };
